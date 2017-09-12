@@ -16,6 +16,7 @@ import { getPathLabel, IWorkspaceFolderProvider } from 'vs/base/common/labels';
 import { PLAINTEXT_MODE_ID } from 'vs/editor/common/modes/modesRegistry';
 import { IWorkspaceContextService } from 'vs/platform/workspace/common/workspace';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
+import { ITextFileService } from 'vs/workbench/services/textfile/common/textfiles';
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { IModelService } from 'vs/editor/common/services/modelService';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
@@ -23,6 +24,8 @@ import { IUntitledEditorService } from 'vs/workbench/services/untitled/common/un
 import { Schemas } from 'vs/base/common/network';
 import { FileKind } from 'vs/platform/files/common/files';
 import { IModel } from 'vs/editor/common/editorCommon';
+
+import * as child from 'child_process'
 
 export interface IResourceLabel {
 	name: string;
@@ -47,6 +50,7 @@ export class ResourceLabel extends IconLabel {
 		@IExtensionService private extensionService: IExtensionService,
 		@IWorkspaceContextService protected contextService: IWorkspaceContextService,
 		@IConfigurationService private configurationService: IConfigurationService,
+		@ITextFileService private textFileService: ITextFileService,
 		@IModeService private modeService: IModeService,
 		@IModelService private modelService: IModelService,
 		@IEnvironmentService protected environmentService: IEnvironmentService
@@ -62,6 +66,37 @@ export class ResourceLabel extends IconLabel {
 		this.extensionService.onReady().then(() => this.render(true /* clear cache */)); // update when extensions are loaded with potentially new languages
 		this.toDispose.push(this.configurationService.onDidUpdateConfiguration(() => this.render(true /* clear cache */))); // update when file.associations change
 		this.toDispose.push(this.modelService.onModelModeChanged(e => this.onModelModeChanged(e))); // react to model mode changes
+		this.toDispose.push(this.textFileService.models.onModelSaved((e) => this.onModelModeSaved(e)));
+	}
+
+	private getGitStatusClass(): string {
+		if (!this.options.parentResource) {
+			return null;
+		}
+
+		const gitStatusCommand = `git status --short --ignored ${this.label.resource.path}`;
+		const gitStatus = child.execSync(gitStatusCommand, { cwd: this.options.parentResource.path }).toString();
+
+		switch (gitStatus.substr(0, 3)) {
+			case '?? ':
+				return 'git-status-added';
+			case '!! ':
+				return 'git-status-ignored';
+			case ' M ':
+				return 'git-status-updated';
+			case '':
+				return 'git-status-untouched';
+		}
+
+		return null;
+	}
+
+	private onModelModeSaved(e: { resource: uri}): void {
+		if (this.label.resource.path !== e.resource.path) {
+			return;
+		}
+
+		this.render(true);
 	}
 
 	private onModelModeChanged(e: { model: IModel; oldModeId: string; }): void {
@@ -159,6 +194,22 @@ export class ResourceLabel extends IconLabel {
 			extraClasses.push(...this.options.extraClasses);
 		}
 
+		const gitStatusClass = this.getGitStatusClass()
+		if (gitStatusClass) {
+			let previousGitStatusClassIndex
+			extraClasses.forEach((extraClass, index) => {
+				if (extraClass.indexOf('git-status') !== -1) {
+					previousGitStatusClassIndex = index
+				}
+			})
+
+			if (previousGitStatusClassIndex) {
+				extraClasses[previousGitStatusClassIndex] = gitStatusClass
+			} else {
+				extraClasses.push(gitStatusClass)
+			}
+		}
+
 		const italic = this.options && this.options.italic;
 		const matches = this.options && this.options.matches;
 
@@ -201,12 +252,13 @@ export class FileLabel extends ResourceLabel {
 		@IExtensionService extensionService: IExtensionService,
 		@IWorkspaceContextService contextService: IWorkspaceContextService,
 		@IConfigurationService configurationService: IConfigurationService,
+		@ITextFileService private textFileService: ITextFileService,
 		@IModeService modeService: IModeService,
 		@IModelService modelService: IModelService,
 		@IEnvironmentService environmentService: IEnvironmentService,
 		@IUntitledEditorService private untitledEditorService: IUntitledEditorService
 	) {
-		super(container, options, extensionService, contextService, configurationService, modeService, modelService, environmentService);
+		super(container, options, extensionService, contextService, configurationService, textFileService, modeService, modelService, environmentService);
 	}
 
 	public setFile(resource: uri, options?: IFileLabelOptions): void {

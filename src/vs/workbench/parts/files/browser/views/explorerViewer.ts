@@ -322,7 +322,7 @@ export class FileRenderer implements IRenderer {
 			if (!stat.exists && stat.isRoot) {
 				extraClasses.push('nonexistent-root');
 			}
-			templateData.label.setFile(stat.resource, { hidePath: true, fileKind: stat.isRoot ? FileKind.ROOT_FOLDER : stat.isDirectory ? FileKind.FOLDER : FileKind.FILE, extraClasses });
+			templateData.label.setFile(stat.resource, { parentResource: stat.parent.resource, hidePath: true, fileKind: stat.isRoot ? FileKind.ROOT_FOLDER : stat.isDirectory ? FileKind.FOLDER : FileKind.FILE, extraClasses });
 		}
 
 		// Input Box

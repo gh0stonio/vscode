@@ -43,3 +43,15 @@
 .monaco-icon-label.italic > .label-description {
 	font-style: italic;
 }
+
+.monaco-icon-label.git-status-added {
+	color: green;
+}
+
+.monaco-icon-label.git-status-ignored {
+	color: gray;
+}
+
+.monaco-icon-label.git-status-updated {
+	color: orange;
+}
